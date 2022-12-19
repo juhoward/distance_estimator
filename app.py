@@ -4,19 +4,20 @@ import cv2 as cv
 import os
 import datetime, time
 from threading import Thread
-from mono_calibrate import MonoCalibrator
-import numpy as np
-import logging
+from .mono_calibrate import MonoCalibrator
+from .find_distance import RangeFinder
+from .face import FaceDet
+from .detectors import PersonDetector
 
-
-global capture,rec_frame, grey, switch, neg, face, rec, out 
+global capture,rec_frame, switch, rec, out, calibration
 capture=0
+calibration= 0
+estimate=0
 grey=0
 neg=0
 face=0
 switch=1
 rec=0
-
 #make shots directory to save pics
 try:
     os.mkdir('./calibration/imgs/')
@@ -26,6 +27,11 @@ except OSError as error:
 app = Flask(__name__)
 cam = cv.VideoCapture(0)
 calibrator = MonoCalibrator()
+face = FaceDet()
+detector = PersonDetector(face)
+distance_estimator = RangeFinder()
+# TODO: write new log object
+log = None
 
 def to_bytes(frame):
     ret, buffer = cv.imencode('.jpg', frame)
@@ -33,8 +39,7 @@ def to_bytes(frame):
     return frame
 
 def gen_frames():
-    global capture, calibrator
-    cnt = 0
+    global capture, calibrator, calibration, estimate
     p = os.path.join('calibration', 'imgs')
     while True:
         success, frame = cam.read()
@@ -45,24 +50,36 @@ def gen_frames():
             img = calibrator.get_mono_calibration_data(p, frame)
             if not img is None:
                 print(f'detections: {len(calibrator.points2D)}')
+                # after four successful detections, get the focal length
                 if len(calibrator.points2D) > 3:
                     camera_intrinsics = calibrator.mono_calibrate()
-                    # get mean of focal lengths in x and y dimensions
-                    f = (camera_intrinsics[1][0][0] + camera_intrinsics[1][1][1]) / 2
-                    calibrator.f_monocal = f
-                    print(f'focal length: {calibrator.f_monocal}')
+                    if camera_intrinsics:
+                        # get mean of focal lengths in x and y dimensions
+                        f = (camera_intrinsics[1][0][0] + camera_intrinsics[1][1][1]) / 2
+                        calibrator.f = f
+                        # toggle calibration
+                        calibration = 1
+                        print(f'focal length: {calibrator.f}')
                 img = to_bytes(img)
                 # concat frame one-by-one and show result
                 yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + img + b'\r\n\r\n')
+                    b'Content-Type: image/jpeg\r\n\r\n' + img + b'\r\n\r\n')
             else: 
                 frame = to_bytes(frame)
                 yield (b'--frame\r\n'
                         b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+        # calibration must be compelete before distance estimates are given
+        elif calibration == 1 and estimate == 1:
+            frame = distance_estimator.detect(frame, calibrator.f, face, detector, log)
+            frame = to_bytes(frame)
+            yield (b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
         else:
             frame = to_bytes(frame)
             yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+
+
 def record(out):
     global rec_frame
     while(rec):
@@ -83,27 +100,20 @@ def video_feed():
 def tasks():
     global switch,cam
     if request.method == 'POST':
-        if request.form.get('click') == 'Capture':
+        if request.form.get('click') == 'Capture Calibration Image':
             global capture
-            capture=1
-        elif  request.form.get('grey') == 'Grey':
-            global grey
-            grey=not grey
-        elif  request.form.get('neg') == 'Negative':
-            global neg
-            neg=not neg
-        elif  request.form.get('face') == 'Face Only':
-            global face
-            face=not face 
-            if(face):
-                time.sleep(4)   
+            capture = 1
+        if request.form.get('estimate') == 'Estimate':
+            global estimate
+            if estimate == 1:
+                estimate = 0
+            else:
+                estimate = 1
         elif  request.form.get('stop') == 'Stop/Start':
-            
-            if(switch==1):
-                switch=0
+            if(switch == 1):
+                switch = 0
                 cam.release()
                 cv.destroyAllWindows()
-                
             else:
                 cam = cv.VideoCapture(0)
                 switch=1
@@ -111,15 +121,14 @@ def tasks():
             global rec, out
             rec= not rec
             if(rec):
-                now=datetime.datetime.now() 
+                now = datetime.datetime.now() 
                 fourcc = cv.VideoWriter_fourcc(*'XVID')
                 out = cv.VideoWriter('vid_{}.avi'.format(str(now).replace(":",'')), fourcc, 20.0, (640, 480))
                 #Start new thread for recording the video
-                thread = Thread(target = record, args=[out,])
+                thread = Thread(target = record, args = [out,])
                 thread.start()
-            elif(rec==False):
+            elif(rec == False):
                 out.release()
-                          
                  
     elif request.method=='GET':
         return render_template('index.html')

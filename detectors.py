@@ -20,7 +20,8 @@ class PersonDetector(object):
         self.RIGHT_IRIS = [469, 470, 471, 472]
 
         # iris model horizontal points (left, right), vertical points (top, bottom)
-        self.HEAD = [234, 454, 10, 152]
+        # self.HEAD = [234, 454, 10, 152]
+        self.HEAD = [34, 264, 10, 152]
         # body pose head points
         self.BODY_HEAD = [i for i in range(11)]
         # raw coordinates for card from test data
@@ -72,7 +73,7 @@ class PersonDetector(object):
         head_pts = []
         with mp_pose.Pose(min_tracking_confidence=0.5,
                           min_detection_confidence=0.7,
-                          model_complexity=2) as pose:
+                          model_complexity=1) as pose:
 
             self.results = pose.process(img)
             # img.flags.writeable = True
@@ -108,7 +109,6 @@ class PersonDetector(object):
                 #     } for p in self.results.pose_world_landmarks.landmark]
                 return img, head_pts
             else:
-                print('Detector: Body not detected')
                 head_pts.append(False)
                 return img, head_pts
 
