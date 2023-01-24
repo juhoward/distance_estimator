@@ -1,6 +1,6 @@
 import numpy as np
 import mediapipe as mp
-import cv2
+import cv2 as cv
 
 
 class PersonDetector(object):
@@ -21,7 +21,7 @@ class PersonDetector(object):
 
         # iris model horizontal points (left, right), vertical points (top, bottom)
         # self.HEAD = [234, 454, 10, 152]
-        self.HEAD = [34, 264, 10, 152]
+        self.HEAD = [116, 345]
         # body pose head points
         self.BODY_HEAD = [i for i in range(11)]
         # raw coordinates for card from test data
@@ -30,7 +30,6 @@ class PersonDetector(object):
         self.minDetectionCon = minDetectionCon
         self.mpFaceDetection = mp.solutions.face_detection
         self.mpDraw = mp.solutions.drawing_utils
-        self.faceDetection = self.mpFaceDetection.FaceDetection(self.minDetectionCon)
         self.mpface_mesh = mp.solutions.face_mesh
         # mediapipe model output
         self.results = None
@@ -39,13 +38,13 @@ class PersonDetector(object):
         self.h = None
         # face, iris points & measurements
         self.face = face
-    
+
     def findIris(self, img):
         '''
         Detect Irises of a single person in an image. 
         Returns a point mesh. 
         '''
-        imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        imgRGB = cv.cvtColor(img, cv.COLOR_BGR2RGB)
         with self.mpface_mesh.FaceMesh(
             max_num_faces=1,
             refine_landmarks=True,
@@ -68,16 +67,18 @@ class PersonDetector(object):
         Returns list of 11 head points and the image used to detect them.
         '''
         mp_pose = mp.solutions.pose
-        mp_drawing_styles = mp.solutions.drawing_styles
-        mp_drawing = mp.solutions.drawing_utils
+        img.flags.writeable = False
         head_pts = []
         with mp_pose.Pose(min_tracking_confidence=0.5,
                           min_detection_confidence=0.7,
-                          model_complexity=1) as pose:
+                          model_complexity=2) as pose:
 
             self.results = pose.process(img)
-            # img.flags.writeable = True
-            if draw:
+            # draw landmarks using mediapipe functions
+            if draw == True:
+                mp_drawing_styles = mp.solutions.drawing_styles
+                mp_drawing = mp.solutions.drawing_utils
+                img.flags.writeable = True
                 mp_drawing.draw_landmarks(
                     img,
                     self.results.pose_landmarks,
@@ -93,11 +94,6 @@ class PersonDetector(object):
                     if idx in [0,2,5,7,8,9,10]:
                         center = np.multiply([pt.x, pt.y], [self.w, self.h])
                         head_pts.append(center)
-                        # visualization
-                        # center = center.astype(int)
-                        # cv2.circle(img, center, 2, (255,0,255), 2, cv2.LINE_AA)
-                        # message = f"{idx}"
-                        # cv2.putText(img, message, (center[0], center[1]-20), cv2.FONT_HERSHEY_SIMPLEX, .5, (0,255,0), 1, cv2.LINE_AA)
                         
                 # maybe use real 3D positions later. All points relative to center of hip joint
                 # body_pts = [
@@ -109,33 +105,72 @@ class PersonDetector(object):
                 #     } for p in self.results.pose_world_landmarks.landmark]
                 return img, head_pts
             else:
+                print('Detector: Body not detected')
                 head_pts.append(False)
                 return img, head_pts
-
-    def visualize(self, img):
+    def holistic(self, image, draw=False):
         '''
-        function that visualizes face mesh returned by iris detections.
+        Detect face, body, and hands.
         '''
-        # iris visualization
-        left_i = self.face.mesh[self.LEFT_IRIS].astype(int)
-        right_i = self.face.mesh[self.RIGHT_IRIS].astype(int)
-        self.face.l_iris['center'], self.face.l_iris['radius'] = cv2.minEnclosingCircle(left_i)
-        self.face.r_iris['center'], self.face.r_iris['radius'] = cv2.minEnclosingCircle(right_i)
-        center_left = np.array(self.face.l_iris['center'], dtype=np.int32)
-        center_right = np.array(self.face.r_iris['center'], dtype=np.int32)
-        cv2.circle(img, center_left, int(self.face.l_iris['radius']), (255,0,255), 2, cv2.LINE_AA)
-        cv2.circle(img, center_right, int(self.face.r_iris['radius']), (255,0,255), 2, cv2.LINE_AA)
-        # eye outline visualization
-        cv2.polylines(img, [self.face.mesh[self.LEFT_EYE].astype(int)], True, (0,255,0), 1, cv2.LINE_AA)
-        cv2.polylines(img, [self.face.mesh[self.RIGHT_EYE].astype(int)], True, (0,255,0), 1, cv2.LINE_AA)
+        mp_holistic = mp.solutions.holistic
+        with mp_holistic.Holistic(
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+            refine_face_landmarks=True
+            ) as holistic:
+            # To improve performance, optionally mark the image as not writeable to
+            # pass by reference.
+            image.flags.writeable = False
+            # image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+            results = holistic.process(image)
+            if results.face_landmarks is not None:
+                mesh_points = np.array(
+                            [
+                                np.multiply([p.x, p.y], [self.w, self.h]) for p in results.face_landmarks.landmark
+                            ]
+                        )
+                self.face.mesh = mesh_points
+            # Draw landmark annotation on the image.
+            if draw == True:
+                mp_drawing = mp.solutions.drawing_utils
+                mp_drawing_styles = mp.solutions.drawing_styles
+                image.flags.writeable = True
+                image = cv.cvtColor(image, cv.COLOR_RGB2BGR)
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.face_landmarks,
+                    mp_holistic.FACEMESH_CONTOURS,
+                    landmark_drawing_spec=None,
+                    connection_drawing_spec=mp_drawing_styles
+                    .get_default_face_mesh_contours_style())
+                mp_drawing.draw_landmarks(
+                    image,
+                    results.pose_landmarks,
+                    mp_holistic.POSE_CONNECTIONS,
+                    landmark_drawing_spec=mp_drawing_styles
+                    .get_default_pose_landmarks_style())
 
-        cv2.line(img, self.face.mesh[self.HEAD[0]].astype(int), self.face.mesh[self.HEAD[1]].astype(int), (0,255,0), 1, cv2.LINE_AA)
-        cv2.line(img, self.face.mesh[self.HEAD[2]].astype(int), self.face.mesh[self.HEAD[3]].astype(int), (0,255,0), 1, cv2.LINE_AA)
-        # credit card points, take these out later
-        # cv2.circle(img, (505,504), 1, (255,0,255), 2, cv2.LINE_AA)
-        # cv2.circle(img, (675,501), 1, (255,0,255), 2, cv2.LINE_AA)
-        # credit card pts 2
-        # cv2.circle(img, (315,240), 1, (255,0,255), 2, cv2.LINE_AA)
-        # cv2.circle(img, (402,240), 1, (255,0,255), 2, cv2.LINE_AA)
+    
+    def visualize(self, img, type:str):
+        '''
+        if type == 'iris' : visualizes eye points and iris returned by iris detections.
+        else : visualizes a horizontal line between head points of face mesh
+        '''
+        if type == 'iris':
+            # iris visualization
+            left_i = self.face.mesh[self.LEFT_IRIS].astype(int)
+            right_i = self.face.mesh[self.RIGHT_IRIS].astype(int)
+            self.face.l_iris['center'], self.face.l_iris['radius'] = cv.minEnclosingCircle(left_i)
+            self.face.r_iris['center'], self.face.r_iris['radius'] = cv.minEnclosingCircle(right_i)
+            center_left = np.array(self.face.l_iris['center'], dtype=np.int32)
+            center_right = np.array(self.face.r_iris['center'], dtype=np.int32)
+            cv.circle(img, center_left, int(self.face.l_iris['radius']), (255,0,255), 2, cv.LINE_AA)
+            cv.circle(img, center_right, int(self.face.r_iris['radius']), (255,0,255), 2, cv.LINE_AA)
+            # eye outline visualization
+            cv.polylines(img, [self.face.mesh[self.LEFT_EYE].astype(int)], True, (0,255,0), 1, cv.LINE_AA)
+            cv.polylines(img, [self.face.mesh[self.RIGHT_EYE].astype(int)], True, (0,255,0), 1, cv.LINE_AA)
+        cv.line(img, self.face.mesh[self.HEAD[0]].astype(int), self.face.mesh[self.HEAD[1]].astype(int), (0,255,0), 1, cv.LINE_AA)
+        # cv.line(img, self.face.mesh[self.HEAD[0]].astype(int), self.face.mesh[self.HEAD[1]].astype(int), (0,255,0), 1, cv.LINE_AA)
+        # cv.line(img, self.face.mesh[self.HEAD[2]].astype(int), self.face.mesh[self.HEAD[3]].astype(int), (0,255,0), 1, cv.LINE_AA)
         # iris output
         self.frame = img

@@ -20,17 +20,24 @@ class FaceDet(object):
         # credit card width (mm)
         self.w_card = 85.6
         # mean human iris diameter (mm)
-        self.w_iris = 11.7
+        self.w_iris = 0
         # iris data
         self.l_iris = {'center': None, 'radius': None}
         self.r_iris = {'center': None, 'radius': None}
         self.i_diameter = 0
         # mediapipe face mesh
         self.mesh = None
+        # face mesh indices for eye
+        self.LEFT_EYE  = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
+        self.RIGHT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
         # mesh indices for iris points
         self.LEFT_IRIS = [474, 475, 476, 477]
         self.RIGHT_IRIS = [469, 470, 471, 472]
-        # mediapipe head pts
+        # self.HEAD = [116, 345]
+        self.HEAD = [234,454]
+        # face mesh end points: (left, right), (top, bottom)
+        # self.HEAD = [234, 454, 10, 152]
+        # body model head pts
         self.head_pts = None
         # head width (mm) based on iris diameter (mm)
         self.head_w = 0
@@ -58,6 +65,31 @@ class FaceDet(object):
         self.error = 0
         self.errors = []
 
+    def s2c_dist(self, f, w_object, w_pix, inches=True):
+        '''
+        returns the subject-to-camera distance in mm using triangle similarity.
+        f : focal length in pixels
+        w_object : known width of object in mm
+        w_pix : object width in pixels
+        '''
+        # subject to camera distaince (mm)
+        s2c_d = (f * w_object) / w_pix
+
+        # transform mm to cm
+        s2c_d /= 10
+        # log metric distance (cm) for parameter estimation
+        self.s2c_ds.append(s2c_d)
+        if inches == True:
+            # return distance in inches
+            s2c_d = s2c_d / 2.54
+            s2c_d_i = s2c_d_i / 2.54
+        else:
+            # return distance in ft
+            s2c_d = self.cm_to_ft(s2c_d)
+        # keep state for reporting
+        self.s2c_d = s2c_d
+        self.s2c_d_i = s2c_d_i
+
     def get_iris_diameter(self):
         '''
         returns the median iris diameter (pixels) using the 8 iris keypoints
@@ -69,15 +101,15 @@ class FaceDet(object):
         measurements = []
         for pts in kpts:
             # 2 euclidean distances per eye
-            diameter1 = dist(pts[0], pts[2]) # x dimension
-            diameter2 = dist(pts[1], pts[3]) # y dimension
+            diameter1 = dist(pts[0], pts[2])
+            diameter2 = dist(pts[1], pts[3])
             measurements.append(diameter1)
             measurements.append(diameter2)
         # returns median of the 4 diameters
         self.i_diameter = median(measurements)
         return self.i_diameter
 
-    def get_w_iris(self, w_card, card_w_pix):
+    def get_w_iris(self, w_card, card_w_pix, card=True):
         '''
         uses width of the credit card to estimate the corneal diameter
         of detected irises.
@@ -108,12 +140,12 @@ class FaceDet(object):
         appends the head width in a list for later use. 
         p1 & p2 are tuples (x, y) representing detected head points.
         '''
-        # head width in pixels
+        # update head width in pixels
         self.head_pixw = dist(p1, p2)
         # horizontal distance in mm/pixel units : iris plane
-        if self.i_diameter is not None:
-            head_w = (self.head_pixw * self.w_iris) / self.i_diameter
-            if logging:
+        if logging:
+            if self.i_diameter is not None:
+                head_w = (self.head_pixw * self.w_iris) / self.i_diameter
                 self.head_measurements.append(head_w)
                 self.head_w = median(self.head_measurements)
 
