@@ -34,7 +34,7 @@ class DistanceEstimator(object):
             x, y, w, h = self.roi
             undist = undist[y:y+h, x:x+w]
             undist = np.ascontiguousarray(undist)
-            image, distance = self.detect(undist, self.f_length, face, detector)
+            image, distance = self.detect(frame, self.f_length, face, detector)
             cv.imshow('Distance Estimation', image)
             cv.waitKey(1)
 
@@ -47,6 +47,8 @@ class DistanceEstimator(object):
         # if a face is detected, base S2c distance on iris diameter
         if not face.mesh is None:
             if len(face.mesh) > 468:
+                # visualize landmarks
+                detector.visualize(frame, 'iris')
                 # calculate median iris diameter (pixels)
                 i_diameter = face.get_iris_diameter()
                 # subject-to-camera distance (cm)
@@ -54,36 +56,35 @@ class DistanceEstimator(object):
                 # convert from (cm) to (in)
                 s2c_dist /= 2.54
                 # write output to rgb frame
-                message = f"S2C Distances(in): {s2c_dist}"
+                message = f"S2C Distances(in): {round(s2c_dist, 2)}"
                 messages = [message]
                 self.write_messages(messages, frame)
                 return frame, s2c_dist
-
         # if no face is detected by iris model, use holistic
         # S2C distance is based on median head width relative to iris diameter
         elif face.mesh is None:
             detector.holistic(frame)
             if not face.mesh is None:
                 detector.visualize(frame, 'face')
-                pt1 = face.mesh[face.HEAD[0]]
-                pt2 = face.mesh[face.HEAD[1]]
+                pt1 = face.mesh[face.HEAD2[0]]
+                pt2 = face.mesh[face.HEAD2[1]]
                 face.get_headw(pt1, pt2, logging=False)
                 # subject-to-camera distance (cm)
                 s2c_dist = self.s2c_dist(f_length, face.head_w, face.head_pixw)
                 # convert from (cm) to (in)
                 s2c_dist /= 2.54
                 message = 'Iris not detected. Using holistic face mesh.'
-                message2 = f"S2C Distances(in): {s2c_dist}"
+                message2 = f"S2C Distances(in): {round(s2c_dist, 2)}"
                 messages = [message, message2]
                 self.write_messages(messages, frame)
                 return frame, s2c_dist
-        # if no head points detected, neither model found a person
-        else:
-            # print(f'No detection. Face mesh: {type(self.face.mesh)}\nHead pts: {head_pts}')
-            message = 'Body not detected.'
-            # depth_frame = self.to_video_frame(depth_frame)
-            self.write_messages([message], frame)
-        return frame, None
+            # if no head points detected, neither model found a person
+            else:
+                # print(f'No detection. Face mesh: {type(self.face.mesh)}\nHead pts: {head_pts}')
+                message = 'Body not detected.'
+                # depth_frame = self.to_video_frame(depth_frame)
+                self.write_messages([message], frame)
+                return frame, None
 
     def s2c_dist(self, f, w_object, w_pix):
         '''

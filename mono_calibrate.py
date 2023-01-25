@@ -4,7 +4,6 @@ from detectors.body import PersonDetector
 from detectors.card import CardDetector
 from detectors.depth_midas import DepthEstimator
 from statistics import median
-from math import dist
 import numpy as np
 import glob
 
@@ -32,8 +31,6 @@ class MonoCalibrator(object):
         self.face = face
         # credit card width (mm)
         self.w_card = 85.6
-        # 12 inches converted to mm
-        # self.d_2_obj = 12 * 25.4
         # focal length
         self.f_monocal = 0
         # variables for removing lense distortion
@@ -110,8 +107,7 @@ class MonoCalibrator(object):
                         w_irises.append(w_iris)
                         pt1 = self.face.mesh[self.face.HEAD[0]]
                         pt2 = self.face.mesh[self.face.HEAD[1]]
-                        self.face.get_headw(pt1, pt2)
-
+                        self.face.get_headw(pt1, pt2, logging=True)
                     if self.cnt > 29:
                         # update width of the iris (mm)
                         self.face.w_iris = median(w_irises)

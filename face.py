@@ -33,8 +33,9 @@ class FaceDet(object):
         # mesh indices for iris points
         self.LEFT_IRIS = [474, 475, 476, 477]
         self.RIGHT_IRIS = [469, 470, 471, 472]
-        # self.HEAD = [116, 345]
-        self.HEAD = [234,454]
+        self.HEAD = [143, 372]
+        # self.HEAD2 = [234, 454]
+        self.HEAD2 = [35, 265]
         # face mesh end points: (left, right), (top, bottom)
         # self.HEAD = [234, 454, 10, 152]
         # body model head pts
@@ -108,8 +109,8 @@ class FaceDet(object):
         # returns median of the 4 diameters
         self.i_diameter = median(measurements)
         return self.i_diameter
-
-    def get_w_iris(self, w_card, card_w_pix, card=True):
+        
+    def get_w_iris(self, w_card, card_w_pix, error_guard=True):
         '''
         uses width of the credit card to estimate the corneal diameter
         of detected irises.
@@ -124,6 +125,14 @@ class FaceDet(object):
         '''
         # return pixel width of iris
         dmtr = self.get_iris_diameter()
+        if error_guard:
+            i_w_mm = (dmtr * w_card) / card_w_pix
+            if i_w_mm > 12.4 or i_w_mm < 11:
+                print(f'measurement outside acceptable limits: {i_w_mm}')
+                print('defaulting to 11.7 mm')
+                return 11.7
+            else:
+                return i_w_mm
         # return real iris diameter
         return (dmtr * w_card) / card_w_pix
     
