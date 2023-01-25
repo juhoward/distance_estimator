@@ -35,7 +35,7 @@ class FaceDet(object):
         self.RIGHT_IRIS = [469, 470, 471, 472]
         self.HEAD = [143, 372]
         # self.HEAD2 = [234, 454]
-        self.HEAD2 = [35, 265]
+        self.HEAD2 = [226, 446]
         # face mesh end points: (left, right), (top, bottom)
         # self.HEAD = [234, 454, 10, 152]
         # body model head pts
@@ -120,8 +120,8 @@ class FaceDet(object):
         w_card: width of credit card (mm)
         card_w_pix: pixel width of credit card
         dmtr: pixel width of iris
-
-        TODO: check this for accuracy
+        error_guard: if iris measurements reflect megalocornea or microcornea,
+                     default to average human iris width.
         '''
         # return pixel width of iris
         dmtr = self.get_iris_diameter()
