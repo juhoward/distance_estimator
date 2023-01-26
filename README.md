@@ -7,16 +7,21 @@ This distance estimator will return a single individual's distance to the camera
 These procedures assume that miniconda is already installed.
 
 Clone the repo, this example uses ssh
+
 `git clone DigitalOptometrics@vs-ssh.visualstudio.com:v3/DigitalOptometrics/DigitalOptometrics/distance_estimator`
 
 Enter the directory, then
+
 `conda env create -f test.yaml`
+
 and 
+
 `conda activate test`
 
 ## Running the test script
 
 Running this command
+
 `python distance_estimator.py --stream --calibrate`
 
 will initiate the calibration
