@@ -12,11 +12,15 @@ Clone the repo, this example uses ssh
 
 Enter the directory, then
 
-`conda env create -f test.yaml`
+`conda env create -f env.yml`
 
-and 
+if all packages were correctly installed, 
 
 `conda activate test`
+
+if pip packages were not correctly installed,
+
+`python -m pip install -r requirements.txt`
 
 ## Running the test script
 
