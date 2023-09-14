@@ -8,7 +8,7 @@ These procedures assume that miniconda is already installed.
 
 Clone the repo, this example uses ssh
 
-`git clone DigitalOptometrics@vs-ssh.visualstudio.com:v3/DigitalOptometrics/DigitalOptometrics/distance_estimator`
+`git clone https://github.com/juhoward/distance_estimator.git`
 
 Enter the directory, then
 
